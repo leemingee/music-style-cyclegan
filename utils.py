@@ -7,6 +7,7 @@ import pprint
 import scipy.misc
 import numpy as np
 import copy
+import librosa as lbr
 try:
     _imread = scipy.misc.imread
 except AttributeError:
@@ -48,6 +49,11 @@ def load_test_data(image_path, fine_size=256):
     img = img/127.5 - 1
     return img
 
+def load_test_music_data(image_path, fine_size=220):
+    song, sr = lbr.load(image_path, sr=None)
+    song = np.asarray(song[0:629200]).reshape(fine_size, fine_size, -1)
+    return song
+
 def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
     img_A = imread(image_path[0])
     img_B = imread(image_path[1])
@@ -73,13 +79,53 @@ def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
     # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
     return img_AB
 
+def load_train_music_data(music_path, load_size = 220, fine_size = 220, is_testing = False):
+    '''
+    :param music_path: a list contains two music file paths,
+    music a file path and music b file path
+    :param load_size: scale images to this size
+    :param fine_size: then crop to this size
+    :param is_testing: testing mode then True
+    :return: todo
+    '''
+    song_a, sr = lbr.load(music_path[0], sr = None)
+    song_a = np.asarray(song_a[0:629200]).reshape(load_size, load_size, -1) # 220 * 220 * 13
+    song_b, sr = lbr.load(music_path[1], sr = None)
+    song_b = np.asarray(song_b[0:629200]).reshape(load_size, load_size, -1)
+    '''
+    if not is_testing: 
+        # if training, then do the data augmentation
+        img_A = scipy.misc.imresize(img_A, [load_size, load_size])
+        img_B = scipy.misc.imresize(img_B, [load_size, load_size])
+        h1 = int(np.ceil(np.random.uniform(1e-2, load_size - fine_size)))
+        w1 = int(np.ceil(np.random.uniform(1e-2, load_size - fine_size)))
+        img_A = img_A[h1:h1 + fine_size, w1:w1 + fine_size]
+        img_B = img_B[h1:h1 + fine_size, w1:w1 + fine_size]
+
+        if np.random.random() > 0.5:
+            img_A = np.fliplr(img_A)
+            img_B = np.fliplr(img_B)
+    else:
+        img_A = scipy.misc.imresize(img_A, [fine_size, fine_size])
+        img_B = scipy.misc.imresize(img_B, [fine_size, fine_size])
+    
+    img_A = img_A / 127.5 - 1.
+    img_B = img_B / 127.5 - 1.
+    '''
+
+    song_AB = np.concatenate((song_a, song_b), axis=2)
+    # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
+    return song_AB
+
 # -----------------------------
 
 def get_image(image_path, image_size, is_crop=True, resize_w=64, is_grayscale = False):
     return transform(imread(image_path, is_grayscale), image_size, is_crop, resize_w)
-
+'''
 def save_images(images, size, image_path):
     return imsave(inverse_transform(images), size, image_path)
+'''
+
 
 def imread(path, is_grayscale = False):
     if (is_grayscale):

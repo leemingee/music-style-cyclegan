@@ -19,6 +19,7 @@ class cyclegan(object):
         self.output_c_dim = args.output_nc
         self.L1_lambda = args.L1_lambda
         self.dataset_dir = args.dataset_dir
+        self.file_type = args.file_type
 
         self.discriminator = discriminator
         if args.use_resnet:
@@ -45,6 +46,7 @@ class cyclegan(object):
                                         [None, self.image_size, self.image_size,
                                          self.input_c_dim + self.output_c_dim],
                                         name='real_A_and_B_images')
+        # there the real a and b images tensor have (? 220, 220, 6)
 
         self.real_A = self.real_data[:, :, :, :self.input_c_dim]
         self.real_B = self.real_data[:, :, :, self.input_c_dim:self.input_c_dim + self.output_c_dim]
@@ -149,13 +151,16 @@ class cyclegan(object):
             for idx in range(0, batch_idxs):
                 batch_files = list(zip(dataA[idx * self.batch_size:(idx + 1) * self.batch_size],
                                        dataB[idx * self.batch_size:(idx + 1) * self.batch_size]))
-                batch_images = [load_train_data(batch_file, args.load_size, args.fine_size) for batch_file in batch_files]
+                # batch_images = [load_train_data(batch_file, args.load_size, args.fine_size) for batch_file in batch_files]
+                batch_images = [load_train_music_data(batch_file, args.load_size, args.fine_size) \
+                                for batch_file in batch_files]
                 batch_images = np.array(batch_images).astype(np.float32)
 
                 # Update G network and record fake outputs
                 fake_A, fake_B, _, summary_str = self.sess.run(
                     [self.fake_A, self.fake_B, self.g_optim, self.g_sum],
                     feed_dict={self.real_data: batch_images, self.lr: lr})
+                # todo the error raise as the session feed dimension in tf
                 self.writer.add_summary(summary_str, counter)
                 [fake_A, fake_B] = self.pool([fake_A, fake_B])
 
@@ -210,17 +215,24 @@ class cyclegan(object):
         np.random.shuffle(dataA)
         np.random.shuffle(dataB)
         batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
-        sample_images = [load_train_data(batch_file, is_testing=True) for batch_file in batch_files]
+        sample_images = [load_train_music_data(batch_file, is_testing=True) for batch_file in batch_files]
         sample_images = np.array(sample_images).astype(np.float32)
 
         fake_A, fake_B = self.sess.run(
             [self.fake_A, self.fake_B],
             feed_dict={self.real_data: sample_images}
         )
+
+        lbr.output.write_wav(path='./{}/A_{:02d}_{:04d}.wav'.format(sample_dir, epoch, idx),
+                             y = fake_A.reshape([629200]), sr=22050)
+        lbr.output.write_wav(path='./{}/B_{:02d}_{:04d}.wav'.format(sample_dir, epoch, idx),
+                             y = fake_B.reshape([629200]), sr=22050)
+        '''
         save_images(fake_A, [self.batch_size, 1],
                     './{}/A_{:02d}_{:04d}.jpg'.format(sample_dir, epoch, idx))
         save_images(fake_B, [self.batch_size, 1],
                     './{}/B_{:02d}_{:04d}.jpg'.format(sample_dir, epoch, idx))
+        '''
 
     def test(self, args):
         """Test cyclegan"""
@@ -249,16 +261,39 @@ class cyclegan(object):
 
         for sample_file in sample_files:
             print('Processing image: ' + sample_file)
-            sample_image = [load_test_data(sample_file, args.fine_size)]
+            sample_image = [load_test_music_data(sample_file, args.fine_size)]
             sample_image = np.array(sample_image).astype(np.float32)
             image_path = os.path.join(args.test_dir,
                                       '{0}_{1}'.format(args.which_direction, os.path.basename(sample_file)))
             fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image})
-            save_images(fake_img, [1, 1], image_path)
-            index.write("<td>%s</td>" % os.path.basename(image_path))
-            index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
-                '..' + os.path.sep + sample_file)))
-            index.write("<td><img src='%s'></td>" % (image_path if os.path.isabs(image_path) else (
-                '..' + os.path.sep + image_path)))
-            index.write("</tr>")
+
+            if args.file_type == 'music':
+            # save_images(fake_img, [1, 1], image_path)
+                lbr.output.write_wav(path=image_path,
+                                     y=fake_img.reshape([629200]), sr=22050)
+                index.write("<td>%s</td>" % os.path.basename(image_path))
+                '''
+                example html for embed the audio files
+                <audio controls>
+                  <source src="horse.ogg" type="audio/ogg">
+                  <source src="horse.mp3" type="audio/mpeg">
+                Your browser does not support the audio element.
+                </audio>
+                '''
+                index.write("<audio controls>")
+                index.write("<td><source src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
+                    '..' + os.path.sep + sample_file)))
+                index.write("<td><source src='%s'></td>" % (image_path if os.path.isabs(image_path) else (
+                    '..' + os.path.sep + image_path)))
+                index.write("</audio>")
+                index.write("</tr>")
+            else:
+                save_images(fake_img, [1, 1], image_path)
+                index.write("<td>%s</td>" % os.path.basename(image_path))
+                index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
+                        '..' + os.path.sep + sample_file)))
+                index.write("<td><img src='%s'></td>" % (image_path if os.path.isabs(image_path) else (
+                        '..' + os.path.sep + image_path)))
+                index.write("</tr>")
+
         index.close()
