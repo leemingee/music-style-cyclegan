@@ -8,3 +8,7 @@ sample/*
 genres/*
 imgs/*
 sample-img-test/*
+TPD/*
+*.zip
+*.ipynb
+Reference/*
